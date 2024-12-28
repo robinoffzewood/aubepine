@@ -39,10 +39,12 @@ impl CalendarMaker {
     /// When all the possibilities have been tried, score each of them, and return the best one.
     /// The score is the sum of events for which the person is an employee, minus the sum of events for which the person is a subcontractor.
     pub fn make_calendar(&mut self, max_subcontractor: u8) {
-        'loop_event: for event in [Event::FirstDaily,
+        'loop_event: for event in [
+            Event::FirstDaily,
             Event::FirstNightly,
             Event::SecondDaily,
-            Event::SecondNightly] {
+            Event::SecondNightly,
+        ] {
             for subco_nb in 0..=max_subcontractor {
                 for availabilities in self.generate_availabilities_with_subco(
                     &self.availabilities.clone(),
@@ -292,10 +294,7 @@ mod tests {
         assert!(calendar_maker.calendar.from() == Date::from_ordinal_date(2025, 1).unwrap());
         assert!(calendar_maker.calendar.get_all().len() == 5);
         assert!(calendar_maker.persons.contains_key("Alice"));
-        assert!(calendar_maker
-            .availabilities
-            .keys()
-            .any(|a| a == "Alice"));
+        assert!(calendar_maker.availabilities.keys().any(|a| a == "Alice"));
         assert!(
             calendar_maker
                 .availabilities

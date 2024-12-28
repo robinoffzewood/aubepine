@@ -1,0 +1,11 @@
+[package]
+name = "roseraie-planning"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "roseraie-planning"
+path = "src/main.rs"
+
+[dependencies]
+time = "0.3.37"

@@ -170,9 +170,9 @@ mod tests {
         let str_2j = "2ème SF jour,x,,,,,,,X,";
         let str_2n = "2ème SF nuit,x,,,,,,,X,";
         let mut availabilities = Availabilities::from_str(day_1, str_1j);
-        availabilities.merge(day_1, &str_1n);
-        availabilities.merge(day_1, &str_2j);
-        availabilities.merge(day_1, &str_2n);
+        availabilities.merge(day_1, str_1n);
+        availabilities.merge(day_1, str_2j);
+        availabilities.merge(day_1, str_2n);
 
         let a = availabilities.pop_event(&day_1, Event::FirstDaily);
         assert_eq!(a, Some(Event::FirstDaily));

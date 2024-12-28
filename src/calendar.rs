@@ -74,7 +74,7 @@ impl Calendar {
         self.days
             .entry(day)
             .and_modify(|events| {
-                events.insert(event.clone(), name.clone());
+                events.insert(event, name.clone());
             })
             .or_insert_with(|| {
                 let mut events = HashMap::new();

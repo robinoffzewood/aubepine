@@ -39,12 +39,10 @@ impl CalendarMaker {
     /// When all the possibilities have been tried, score each of them, and return the best one.
     /// The score is the sum of events for which the person is an employee, minus the sum of events for which the person is a subcontractor.
     pub fn make_calendar(&mut self, max_subcontractor: u8) {
-        'loop_event: for event in vec![
-            Event::FirstDaily,
+        'loop_event: for event in [Event::FirstDaily,
             Event::FirstNightly,
             Event::SecondDaily,
-            Event::SecondNightly,
-        ] {
+            Event::SecondNightly] {
             for subco_nb in 0..=max_subcontractor {
                 for availabilities in self.generate_availabilities_with_subco(
                     &self.availabilities.clone(),
@@ -66,12 +64,10 @@ impl CalendarMaker {
 
     pub fn print_calendar(&self) {
         for (day, events) in self.calendar.get_all() {
-            for event in vec![
-                Event::FirstDaily,
+            for event in [Event::FirstDaily,
                 Event::FirstNightly,
                 Event::SecondDaily,
-                Event::SecondNightly,
-            ] {
+                Event::SecondNightly] {
                 if let Some(name) = events.get(&event) {
                     println!("{}, {:?}, {}", day, event, name);
                 }
@@ -105,11 +101,11 @@ impl CalendarMaker {
             };
             let mut availabilities_str = event_str.to_string();
             for _ in self.calendar.from().ordinal()..day_ordinal {
-                availabilities_str.push_str(",");
+                availabilities_str.push(',');
             }
-            availabilities_str.push_str("x");
+            availabilities_str.push('x');
             for _ in day_ordinal..self.calendar.to().ordinal() {
-                availabilities_str.push_str(",");
+                availabilities_str.push(',');
             }
             let mut extra_availabilities = input_availabilities.clone();
             extra_availabilities
@@ -146,8 +142,8 @@ impl CalendarMaker {
                     let mut new_calendar = calendar.clone();
                     let mut new_availabilities = availabilities.clone();
                     new_calendar.set_for(day, event, name.clone());
-                    let mut her_availabilities = new_availabilities.get_mut(&name).unwrap();
-                    Self::update_availabilities(&mut her_availabilities, day, event);
+                    let her_availabilities = new_availabilities.get_mut(&name).unwrap();
+                    Self::update_availabilities(her_availabilities, day, event);
                     (new_availabilities, new_calendar) =
                         Self::find_next(new_availabilities, new_calendar, event);
                     // if there are less empty days than before, consider this branch as successful, and break this loop
@@ -299,8 +295,7 @@ mod tests {
         assert!(calendar_maker
             .availabilities
             .keys()
-            .find(|a| a.to_string() == "Alice")
-            .is_some());
+            .any(|a| a == "Alice"));
         assert!(
             calendar_maker
                 .availabilities
@@ -351,9 +346,9 @@ mod tests {
 
         let content = "JANVIER,2025,1,2,3,4,5\r\nAlice,1ère SF jour,x,x,x,x,x\r\nAlice,2ème SF jour,x,x,x,x,x\r\nAlice,2ème SF nuit,x,x,x,x,x\r\n";
         let mut calendar_maker = CalendarMaker::from_lines(&mut content.lines());
-        let mut her_availabilities = calendar_maker.availabilities.get_mut("Alice").unwrap();
+        let her_availabilities = calendar_maker.availabilities.get_mut("Alice").unwrap();
         // Get her on call for saturday as SecondDaily. She would still be fully available for sunday and friday, but only as SecondNightly for saturday.
-        CalendarMaker::update_availabilities(&mut her_availabilities, saturday, Event::SecondDaily);
+        CalendarMaker::update_availabilities(her_availabilities, saturday, Event::SecondDaily);
         assert_eq!(
             her_availabilities.get(&saturday).unwrap(),
             &vec![Event::SecondNightly]
@@ -367,7 +362,7 @@ mod tests {
             &vec![Event::FirstDaily, Event::SecondDaily, Event::SecondNightly]
         );
         // Get her on call for Thursday as SecondDaily. She would no longer be available for Wednesday and Friday.
-        CalendarMaker::update_availabilities(&mut her_availabilities, thursday, Event::SecondDaily);
+        CalendarMaker::update_availabilities(her_availabilities, thursday, Event::SecondDaily);
         assert_eq!(her_availabilities.get(&thursday).unwrap(), &vec![]);
         assert_eq!(her_availabilities.get(&wednesday).unwrap(), &vec![]);
         assert_eq!(her_availabilities.get(&friday).unwrap(), &vec![]);
@@ -490,11 +485,11 @@ mod tests {
                     .contains(&FirstDaily));
             }
             // Check for the EXT-1 absence
-            if vec![1, 5, 9].contains(&i) {
+            if [1, 5, 9].contains(&i) {
                 assert!(a.get("EXT-1D-1").is_none());
             }
             // Check for the EXT-1 presence
-            if vec![2, 6, 10].contains(&i) {
+            if [2, 6, 10].contains(&i) {
                 assert!(a
                     .get("EXT-1D-1")
                     .unwrap()
@@ -502,7 +497,7 @@ mod tests {
                     .unwrap()
                     .contains(&FirstDaily));
             }
-            if vec![3, 7, 11].contains(&i) {
+            if [3, 7, 11].contains(&i) {
                 assert!(a
                     .get("EXT-1D-1")
                     .unwrap()
@@ -510,7 +505,7 @@ mod tests {
                     .unwrap()
                     .contains(&FirstDaily));
             }
-            if vec![4, 8, 12].contains(&i) {
+            if [4, 8, 12].contains(&i) {
                 assert!(a
                     .get("EXT-1D-1")
                     .unwrap()

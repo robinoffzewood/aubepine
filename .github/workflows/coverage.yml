@@ -31,7 +31,7 @@ jobs:
       - name: Install lcov
         run: sudo apt-get install lcov
       - name: Report code coverage in Pull Request
-        uses: zgosalvez/github-actions-report-lcov@6506e48a2b73c1750fe277608b554de06ff80d6c # v4.1.5
+        uses: zgosalvez/github-actions-report-lcov@v4.1.21
         with:
           coverage-files: target/coverage/lcov.*.info
           artifact-name: code-coverage-report

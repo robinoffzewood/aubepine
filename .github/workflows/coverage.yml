@@ -12,6 +12,7 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - run: rustup update stable
 
       - name: Run unit tests with code coverage

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use availabilities::Availabilities;
 use calendar::{Calendar, Event};
+use itertools::Itertools;
 use time::Date;
 
 mod availabilities;
@@ -16,6 +17,7 @@ pub struct CalendarMaker {
     calendar: Calendar,
     availabilities: AvailabilitiesPerPerson,
     persons: HashMap<Name, person::Person>,
+    max_subcontractor: u8,
 }
 
 impl CalendarMaker {
@@ -39,37 +41,56 @@ impl CalendarMaker {
     /// When all the possibilities have been tried, score each of them, and return the best one.
     /// The score is the sum of events for which the person is an employee, minus the sum of events for which the person is a subcontractor.
     pub fn make_calendar(&mut self, max_subcontractor: u8) {
-        'loop_event: for event in [
+        self.max_subcontractor = max_subcontractor;
+        let events = vec![
             Event::FirstDaily,
             Event::FirstNightly,
             Event::SecondDaily,
             Event::SecondNightly,
-        ] {
-            for subco_nb in 0..=max_subcontractor {
-                for availabilities in self.generate_availabilities_with_subco(
-                    &self.availabilities.clone(),
-                    subco_nb,
-                    event,
-                ) {
-                    let (new_availabilities, new_calendar) =
-                        Self::find_next(availabilities, self.calendar.clone(), event);
-                    if new_calendar.get_empty_days(&event).is_empty() {
-                        self.calendar = new_calendar;
-                        self.availabilities = new_availabilities;
-                        continue 'loop_event;
-                    }
+        ];
+        let all_combinations_of_events = events.iter().permutations(events.len());
+        for combination in all_combinations_of_events {
+            let mut no_solution_for_event = Vec::new();
+            for event in combination {
+                self.make_calendar_for_event(*event);
+                if !self.calendar.get_empty_days(&event).is_empty() {
+                    no_solution_for_event.push(event);
+                    // println!("No perfect solution found for event {:?}", event);
                 }
             }
-            println!("No solution found for event {:?}", event);
+            if no_solution_for_event.is_empty() {
+                println!("All 4 solutions found!");
+                break;
+            }
+        }
+    }
+
+    fn make_calendar_for_event(&mut self, event: Event) {
+        'loop_subco: for subco_nb in 0..=self.max_subcontractor {
+            for availabilities in self.generate_availabilities_with_subco(
+                &self.availabilities.clone(),
+                subco_nb,
+                event,
+            ) {
+                let (new_availabilities, new_calendar) =
+                    Self::find_next(availabilities, self.calendar.clone(), event);
+                if new_calendar.get_empty_days(&event).is_empty() {
+                    self.calendar = new_calendar;
+                    self.availabilities = new_availabilities;
+                    break 'loop_subco;
+                }
+            }
         }
     }
 
     pub fn print_calendar(&self) {
         for (day, events) in self.calendar.get_all() {
-            for event in [Event::FirstDaily,
+            for event in [
+                Event::FirstDaily,
                 Event::FirstNightly,
                 Event::SecondDaily,
-                Event::SecondNightly] {
+                Event::SecondNightly,
+            ] {
                 if let Some(name) = events.get(&event) {
                     println!("{}, {:?}, {}", day, event, name);
                 }
@@ -143,13 +164,15 @@ impl CalendarMaker {
                 for name in names {
                     let mut new_calendar = calendar.clone();
                     let mut new_availabilities = availabilities.clone();
+                    // Set the person for this day, and update her availabilities
                     new_calendar.set_for(day, event, name.clone());
                     let her_availabilities = new_availabilities.get_mut(&name).unwrap();
                     Self::update_availabilities(her_availabilities, day, event);
+                    // Continue to find the next person for the next day
                     (new_availabilities, new_calendar) =
                         Self::find_next(new_availabilities, new_calendar, event);
-                    // if there are less empty days than before, consider this branch as successful, and break this loop
-                    if new_calendar.get_empty_days(&event).len() < remaining_days.len() {
+                    // Successful end condition is reached, return the result
+                    if new_calendar.get_empty_days(&event).is_empty() {
                         availabilities = new_availabilities;
                         calendar = new_calendar;
                         break;
@@ -277,6 +300,7 @@ impl CalendarMaker {
             calendar,
             availabilities,
             persons,
+            max_subcontractor: 0,
         }
     }
 }

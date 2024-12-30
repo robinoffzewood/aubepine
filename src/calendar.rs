@@ -32,10 +32,10 @@ pub struct Calendar {
 impl fmt::Display for Event {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let event_str = match self {
-            Event::FirstDaily => "1D",
-            Event::FirstNightly => "1N",
-            Event::SecondDaily => "2D",
-            Event::SecondNightly => "2N",
+            Event::FirstDaily => "J",
+            Event::FirstNightly => "N",
+            Event::SecondDaily => "j",
+            Event::SecondNightly => "n",
         };
         write!(f, "{}", event_str)
     }
@@ -61,6 +61,7 @@ impl Calendar {
         self.to
     }
 
+    #[allow(dead_code)]
     pub fn get_all(&self) -> &BTreeMap<Date, HashMap<Event, Name>> {
         &self.days
     }
@@ -91,6 +92,30 @@ impl Calendar {
             }
         }
         missing
+    }
+
+    pub fn print(&self) {
+        println!("-----------------");
+        println!(
+            "     |{}",
+            self.days
+                .keys()
+                .map(|d| format!("  {:0>2}  |", d.day()))
+                .collect::<String>()
+        );
+        for event in &[
+            Event::FirstDaily,
+            Event::FirstNightly,
+            Event::SecondDaily,
+            Event::SecondNightly,
+        ] {
+            print!("{}    |", event);
+            for (_, events) in &self.days {
+                print!(" {:<5}|", events.get(event).unwrap_or(&"   ".to_string()));
+            }
+            println!();
+        }
+        println!("-----------------");
     }
 }
 

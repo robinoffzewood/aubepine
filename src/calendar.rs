@@ -98,10 +98,8 @@ impl Calendar {
         println!("-----------------");
         println!(
             "     |{}",
-            self.days
-                .keys()
-                .map(|d| format!("  {:0>2}  |", d.day()))
-                .collect::<String>()
+            self.days.keys().fold(String::new(), |acc, x| acc
+                + &format!("  {:0>2}  |", x.day()))
         );
         for event in &[
             Event::FirstDaily,
@@ -110,7 +108,7 @@ impl Calendar {
             Event::SecondNightly,
         ] {
             print!("{}    |", event);
-            for (_, events) in &self.days {
+            for events in self.days.values() {
                 print!(" {:<5}|", events.get(event).unwrap_or(&"   ".to_string()));
             }
             println!();

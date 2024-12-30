@@ -45,12 +45,10 @@ impl CalendarMaker {
     /// The score is the sum of events for which the person is an employee, minus the sum of events for which the person is a subcontractor.
     pub fn make_calendar(&mut self, max_subcontractor: u8) {
         self.max_subcontractor = max_subcontractor;
-        let events = vec![
-            Event::FirstDaily,
+        let events = [Event::FirstDaily,
             Event::FirstNightly,
             Event::SecondDaily,
-            Event::SecondNightly,
-        ];
+            Event::SecondNightly];
         let all_combinations_of_events = events.iter().permutations(events.len());
         for combination in all_combinations_of_events {
             // println!(

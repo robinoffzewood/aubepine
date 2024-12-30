@@ -37,18 +37,17 @@ impl CalendarMaker {
     ///  - One person can't be on-call for two consecutive days, except for the Second level on friday, saturday and sunday.
     ///  - One person can't be on-call for two consecutive events, except for the Second level on friday, saturday and sunday.
     ///
-    /// Start by filling the First level, day and night, then the Second level, day and night.
-    /// Sort the days by the number of available persons, and start by the day with the least available persons.
+    /// Start by the days with the least available persons.
     /// When finding a person for a day, remove them from the list of available persons for this day, but also the previous and the next day.
-    /// Try all the possibilities, and store all the solutions. Each solution is a calendar that is entirely filled with persons.
-    /// When all the possibilities have been tried, score each of them, and return the best one.
-    /// The score is the sum of events for which the person is an employee, minus the sum of events for which the person is a subcontractor.
+    /// Try all the possibilities, recursively, stopping when all the days are filled.
     pub fn make_calendar(&mut self, max_subcontractor: u8) {
         self.max_subcontractor = max_subcontractor;
-        let events = [Event::FirstDaily,
+        let events = [
+            Event::FirstDaily,
             Event::FirstNightly,
             Event::SecondDaily,
-            Event::SecondNightly];
+            Event::SecondNightly,
+        ];
         let all_combinations_of_events = events.iter().permutations(events.len());
         for combination in all_combinations_of_events {
             // println!(

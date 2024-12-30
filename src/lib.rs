@@ -52,12 +52,11 @@ impl CalendarMaker {
             Event::SecondNightly,
         ];
         let all_combinations_of_events = events.iter().permutations(events.len());
-        for (combination_index, combination) in all_combinations_of_events.enumerate() {
-            println!(
-                "Trying combination {} = {:?}",
-                combination_index + 1,
-                combination
-            );
+        for combination in all_combinations_of_events {
+            // println!(
+            //     "Trying combination {:?}",
+            //     combination
+            // );
             let mut solution_found_for_event = Vec::new();
             // Start with a clear calendar and original availabilities
             let mut calendar = self.calendar.clone();
@@ -71,12 +70,12 @@ impl CalendarMaker {
                 if calendar.get_empty_days(event).is_empty() {
                     solution_found_for_event.push(event);
                 } else {
-                    println!(" -> No solution found for event {:?}", event);
+                    // println!(" -> No solution found for event {:?}", event);
                     break;
                 }
             }
             if solution_found_for_event.len() == events.len() {
-                println!(" -> All events have a solution!");
+                // println!(" -> All events have a solution!");
                 self.calendar = calendar;
                 self.availabilities = availabilities;
                 break;
@@ -105,9 +104,9 @@ impl CalendarMaker {
     }
 
     pub fn print_results(&self) {
-        for (person, availabilities) in &self.availabilities {
-            println!("{} {}", person, availabilities.format());
-        }
+        // for (person, availabilities) in &self.availabilities {
+        //     println!("{} {}", person, availabilities.format());
+        // }
         self.calendar.print();
     }
 
@@ -171,10 +170,10 @@ impl CalendarMaker {
         let mut calendar = calendar.clone();
         let remaining_days = calendar.get_empty_days(&event);
         if !remaining_days.is_empty() {
-            for (person, availabilities) in &availabilities {
-                println!("{} {}", person, availabilities.format());
-            }
-            calendar.print();
+            // for (person, availabilities) in &availabilities {
+            //     println!("{} {}", person, availabilities.format());
+            // }
+            // calendar.print();
             let days_with_least_availabilities =
                 Self::get_days_with_least_availabilities(&availabilities, &remaining_days, event);
             if let Some(days) = days_with_least_availabilities {
@@ -193,7 +192,7 @@ impl CalendarMaker {
                         if new_calendar.get_empty_days(&event).is_empty() {
                             availabilities = new_availabilities;
                             calendar = new_calendar;
-                            break;
+                            return (availabilities, calendar);
                         }
                     }
                 }

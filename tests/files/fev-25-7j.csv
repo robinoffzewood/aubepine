@@ -25,7 +25,7 @@ CAR,2ème SF jour,,,,,,,
 CAR,2ème SF nuit,,,,,x,,
 SOP,1ère SF jour,,,,,,,
 SOP,1ère SF nuit,,,,,,,
-SOP,2ème SF jour,,,,,,,
+SOP,2ème SF jour,,,,,,x,x
 SOP,2ème SF nuit,,,,,,x,x
 CIN,1ère SF jour,,,,,x,x,
 CIN,1ère SF nuit,,,,x,,,

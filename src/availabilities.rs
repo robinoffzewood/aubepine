@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use itertools::Itertools;
 use time::Date;
 
 use crate::calendar::Event;
@@ -20,7 +21,6 @@ impl Availabilities {
 
     pub fn merge(&mut self, from: Date, line: &str) {
         let new_map = Self::map_from_str(from, line);
-        println!("new_map: {:?}", new_map);
         for (day, availabilities) in new_map {
             self.days
                 .entry(day)
@@ -50,12 +50,6 @@ impl Availabilities {
             .iter()
             .position(|a| *a == event)
             .map(|i| availabilities.remove(i));
-        if event == Event::FirstDaily && availabilities.contains(&Event::SecondDaily) {
-            availabilities.retain(|a| *a != Event::SecondDaily);
-        }
-        if event == Event::SecondDaily && availabilities.contains(&Event::FirstDaily) {
-            availabilities.retain(|a| *a != Event::FirstDaily);
-        }
         popped
     }
 
@@ -88,33 +82,48 @@ impl Availabilities {
 
     /// Update the availabilities of a person, given the day and the event that has been requested.
     pub fn update_availabilities(her_availabilities: &mut Availabilities, day: Date, event: Event) {
+        let next_day = day + time::Duration::days(1);
+        let previous_day = day - time::Duration::days(1);
         her_availabilities.pop_event(&day, event);
         let is_second_on_the_weekend = (event == Event::SecondDaily
             || event == Event::SecondNightly)
             && (day.weekday() == time::Weekday::Friday
                 || day.weekday() == time::Weekday::Saturday
                 || day.weekday() == time::Weekday::Sunday);
-        let remains_available_next_day = is_second_on_the_weekend
+        if !is_second_on_the_weekend {
+            her_availabilities.pop_all(&day);
+            her_availabilities.pop_all(&previous_day);
+            her_availabilities.pop_all(&next_day);
+        } else {
+            her_availabilities.pop_event(&day, Event::FirstDaily);
+            her_availabilities.pop_event(&day, Event::FirstNightly);
+        }
+
+        let remains_available_as_second_next_day = is_second_on_the_weekend
             && (day.weekday() == time::Weekday::Friday || day.weekday() == time::Weekday::Saturday);
-        let remains_available_previous_day = is_second_on_the_weekend
-            && (day.weekday() == time::Weekday::Saturday || day.weekday() == time::Weekday::Sunday);
-        if !remains_available_next_day {
-            let next_day = day + time::Duration::days(1);
+        if remains_available_as_second_next_day {
+            her_availabilities.pop_event(&next_day, Event::FirstDaily);
+            her_availabilities.pop_event(&next_day, Event::FirstNightly);
+        } else {
             her_availabilities.pop_all(&next_day);
         }
-        if !remains_available_previous_day {
-            let previous_day = day - time::Duration::days(1);
+
+        let remains_available_as_second_previous_day = is_second_on_the_weekend
+            && (day.weekday() == time::Weekday::Saturday || day.weekday() == time::Weekday::Sunday);
+        if remains_available_as_second_previous_day {
+            her_availabilities.pop_event(&previous_day, Event::FirstDaily);
+            her_availabilities.pop_event(&previous_day, Event::FirstNightly);
+        } else {
             her_availabilities.pop_all(&previous_day);
-        }
-        if !remains_available_next_day || !remains_available_previous_day {
-            her_availabilities.pop_all(&day);
         }
     }
 
+    #[allow(dead_code)]
     pub fn format(&self) -> String {
         // For each day, print a line with a letter corresponding to the availability, and a space otherwise.
         let mut formatted = String::new();
-        for availabilities in self.days.values() {
+        for day_ordinal in self.days.keys().sorted() {
+            let availabilities = self.days.get(day_ordinal).unwrap();
             formatted.push_str(" | ");
             for event in &[
                 Event::FirstDaily,
@@ -233,7 +242,7 @@ mod tests {
     }
 
     #[test]
-    fn test_update_her_availabilities_1() {
+    fn test_update_her_availabilities() {
         let wednesday = Date::from_ordinal_date(2025, 1).unwrap();
         let thursday = Date::from_ordinal_date(2025, 2).unwrap();
         let friday = Date::from_ordinal_date(2025, 3).unwrap();
@@ -241,7 +250,7 @@ mod tests {
         let sunday = Date::from_ordinal_date(2025, 5).unwrap();
 
         let str_1j = "1ère SF jour,x,x,x,x,x";
-        let str_1n = "1ère SF nuit,,,,,";
+        let str_1n = "1ère SF nuit,x,x,x,x,x";
         let str_2j = "2ème SF jour,x,x,x,x,x";
         let str_2n = "2ème SF nuit,x,x,x,x,x";
 
@@ -249,52 +258,105 @@ mod tests {
         availabilities.merge(wednesday, str_1n);
         availabilities.merge(wednesday, str_2j);
         availabilities.merge(wednesday, str_2n);
+        let all = vec![
+            Event::FirstDaily,
+            Event::FirstNightly,
+            Event::SecondDaily,
+            Event::SecondNightly,
+        ];
+        let second = vec![Event::SecondDaily, Event::SecondNightly];
 
-        // Get her on call for saturday as SecondDaily. She would still be fully available for sunday and friday, but only as SecondNightly for saturday.
-        Availabilities::update_availabilities(&mut availabilities, saturday, Event::SecondDaily);
+        let mut av_cloned = availabilities.clone();
+        // Get her on call for Wednesday as FirstDaily. She would no longer be available for Thursday.
+        Availabilities::update_availabilities(&mut av_cloned, wednesday, Event::FirstDaily);
+        assert_eq!(av_cloned.get(&wednesday).unwrap(), &vec![]);
+        assert_eq!(av_cloned.get(&thursday).unwrap(), &vec![]);
+        assert_eq!(av_cloned.get(&friday).unwrap(), &all);
+        assert_eq!(av_cloned.get(&saturday).unwrap(), &all);
+        assert_eq!(av_cloned.get(&sunday).unwrap(), &all);
+
+        let mut av_cloned = availabilities.clone();
+        // Get her on call for Thursday as FirstDaily. She would no longer be available for Wednesday and Friday.
+        Availabilities::update_availabilities(&mut av_cloned, thursday, Event::FirstDaily);
+        assert_eq!(av_cloned.get(&wednesday).unwrap(), &vec![]);
+        assert_eq!(av_cloned.get(&thursday).unwrap(), &vec![]);
+        assert_eq!(av_cloned.get(&friday).unwrap(), &vec![]);
+        assert_eq!(av_cloned.get(&saturday).unwrap(), &all);
+        assert_eq!(av_cloned.get(&sunday).unwrap(), &all);
+
+        let mut av_cloned = availabilities.clone();
+        // Get her on call for Friday as FirstDaily. She would no longer be available for Thursday and Saturday.
+        Availabilities::update_availabilities(&mut av_cloned, friday, Event::FirstDaily);
+        assert_eq!(av_cloned.get(&wednesday).unwrap(), &all);
+        assert_eq!(av_cloned.get(&thursday).unwrap(), &vec![]);
+        assert_eq!(av_cloned.get(&friday).unwrap(), &vec![]);
+        assert_eq!(av_cloned.get(&saturday).unwrap(), &vec![]);
+        assert_eq!(av_cloned.get(&sunday).unwrap(), &all);
+
+        let mut av_cloned = availabilities.clone();
+        // Get her on call for Saturday as FirstDaily. She would no longer be available for Friday and Sunday.
+        Availabilities::update_availabilities(&mut av_cloned, saturday, Event::FirstDaily);
+        assert_eq!(av_cloned.get(&wednesday).unwrap(), &all);
+        assert_eq!(av_cloned.get(&thursday).unwrap(), &all);
+        assert_eq!(av_cloned.get(&friday).unwrap(), &vec![]);
+        assert_eq!(av_cloned.get(&saturday).unwrap(), &vec![]);
+        assert_eq!(av_cloned.get(&sunday).unwrap(), &vec![]);
+
+        let mut av_cloned = availabilities.clone();
+        // Get her on call for Sunday as FirstDaily. She would no longer be available for Saturday.
+        Availabilities::update_availabilities(&mut av_cloned, sunday, Event::FirstDaily);
+        assert_eq!(av_cloned.get(&wednesday).unwrap(), &all);
+        assert_eq!(av_cloned.get(&thursday).unwrap(), &all);
+        assert_eq!(av_cloned.get(&friday).unwrap(), &all);
+        assert_eq!(av_cloned.get(&saturday).unwrap(), &vec![]);
+        assert_eq!(av_cloned.get(&sunday).unwrap(), &vec![]);
+
+        let mut av_cloned = availabilities.clone();
+        // Get her on call for Wednesday as SecondDaily. She would no longer be available for Thursday.
+        Availabilities::update_availabilities(&mut av_cloned, wednesday, Event::SecondDaily);
+        assert_eq!(av_cloned.get(&wednesday).unwrap(), &vec![]);
+        assert_eq!(av_cloned.get(&thursday).unwrap(), &vec![]);
+        assert_eq!(av_cloned.get(&friday).unwrap(), &all);
+        assert_eq!(av_cloned.get(&saturday).unwrap(), &all);
+        assert_eq!(av_cloned.get(&sunday).unwrap(), &all);
+
+        let mut av_cloned = availabilities.clone();
+        // Get her on call for Thursday as SecondDaily. She would no longer be available for Wednesday and Friday.
+        Availabilities::update_availabilities(&mut av_cloned, thursday, Event::SecondDaily);
+        assert_eq!(av_cloned.get(&wednesday).unwrap(), &vec![]);
+        assert_eq!(av_cloned.get(&thursday).unwrap(), &vec![]);
+        assert_eq!(av_cloned.get(&friday).unwrap(), &vec![]);
+        assert_eq!(av_cloned.get(&saturday).unwrap(), &all);
+        assert_eq!(av_cloned.get(&sunday).unwrap(), &all);
+
+        let mut av_cloned = availabilities.clone();
+        // Get her on call for Friday as SecondDaily. She would no longer be available for Thursday but Saturday for SecondDaily and SecondNightly.
+        Availabilities::update_availabilities(&mut av_cloned, friday, Event::SecondDaily);
+        assert_eq!(av_cloned.get(&wednesday).unwrap(), &all);
+        assert_eq!(av_cloned.get(&thursday).unwrap(), &vec![]);
+        assert_eq!(av_cloned.get(&friday).unwrap(), &vec![Event::SecondNightly]);
+        assert_eq!(av_cloned.get(&saturday).unwrap(), &second);
+        assert_eq!(av_cloned.get(&sunday).unwrap(), &all);
+
+        let mut av_cloned = availabilities.clone();
+        // Get her on call for Saturday as SecondDaily. She would no longer be available for Friday and Sunday as First, but Second.
+        Availabilities::update_availabilities(&mut av_cloned, saturday, Event::SecondDaily);
+        assert_eq!(av_cloned.get(&wednesday).unwrap(), &all);
+        assert_eq!(av_cloned.get(&thursday).unwrap(), &all);
+        assert_eq!(av_cloned.get(&friday).unwrap(), &second);
         assert_eq!(
-            availabilities.get(&saturday).unwrap(),
+            av_cloned.get(&saturday).unwrap(),
             &vec![Event::SecondNightly]
         );
-        assert_eq!(
-            availabilities.get(&friday).unwrap(),
-            &vec![Event::FirstDaily, Event::SecondDaily, Event::SecondNightly]
-        );
-        assert_eq!(
-            availabilities.get(&sunday).unwrap(),
-            &vec![Event::FirstDaily, Event::SecondDaily, Event::SecondNightly]
-        );
-        // Get her on call for Thursday as SecondDaily. She would no longer be available for Wednesday and Friday.
-        Availabilities::update_availabilities(&mut availabilities, thursday, Event::SecondDaily);
-        assert_eq!(availabilities.get(&thursday).unwrap(), &vec![]);
-        assert_eq!(availabilities.get(&wednesday).unwrap(), &vec![]);
-        assert_eq!(availabilities.get(&friday).unwrap(), &vec![]);
-    }
+        assert_eq!(av_cloned.get(&sunday).unwrap(), &second);
 
-    #[test]
-    fn test_update_her_availabilities_first_and_last_day() {
-        let wednesday = Date::from_ordinal_date(2025, 1).unwrap();
-        let thursday = Date::from_ordinal_date(2025, 2).unwrap();
-        let saturday = Date::from_ordinal_date(2025, 4).unwrap();
-        let sunday = Date::from_ordinal_date(2025, 5).unwrap();
-
-        let str_1j = "1ère SF jour,x,x,x,x,x";
-        let str_1n = "1ère SF nuit,,,,,";
-        let str_2j = "2ème SF jour,x,x,x,x,x";
-        let str_2n = "2ème SF nuit,x,x,x,x,x";
-
-        let mut availabilities = Availabilities::from_str(wednesday, str_1j);
-        availabilities.merge(wednesday, str_1n);
-        availabilities.merge(wednesday, str_2j);
-        availabilities.merge(wednesday, str_2n);
-
-        // Get her on call for Sunday as FirstDaily. She would no longer be available on saturday not sunday.
-        Availabilities::update_availabilities(&mut availabilities, sunday, Event::FirstDaily);
-        assert_eq!(availabilities.get(&saturday).unwrap(), &vec![]);
-        assert_eq!(availabilities.get(&sunday).unwrap(), &vec![]);
-        // Get her on call for Wednesday as FirstDaily. She would no longer be available for Wednesday and Thursday.
-        Availabilities::update_availabilities(&mut availabilities, wednesday, Event::FirstDaily);
-        assert_eq!(availabilities.get(&wednesday).unwrap(), &vec![]);
-        assert_eq!(availabilities.get(&thursday).unwrap(), &vec![]);
+        let mut av_cloned = availabilities.clone();
+        // Get her on call for Sunday as SecondDaily. She would no longer be available for Saturday.
+        Availabilities::update_availabilities(&mut av_cloned, sunday, Event::SecondDaily);
+        assert_eq!(av_cloned.get(&wednesday).unwrap(), &all);
+        assert_eq!(av_cloned.get(&thursday).unwrap(), &all);
+        assert_eq!(av_cloned.get(&friday).unwrap(), &all);
+        assert_eq!(av_cloned.get(&saturday).unwrap(), &second);
+        assert_eq!(av_cloned.get(&sunday).unwrap(), &vec![Event::SecondNightly]);
     }
 }

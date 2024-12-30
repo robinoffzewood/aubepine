@@ -8,5 +8,6 @@ name = "roseraie-planning"
 path = "src/main.rs"
 
 [dependencies]
+clap = { version = "4.5.23", features = ["derive"] }
 itertools = "0.13.0"
 time = "0.3.37"

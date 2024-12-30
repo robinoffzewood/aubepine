@@ -18,6 +18,7 @@ pub struct CalendarMaker {
     availabilities: AvailabilitiesPerPerson,
     _persons: HashMap<Name, person::Person>,
     max_subcontractor: u8,
+    verbose: bool,
 }
 
 impl CalendarMaker {
@@ -40,8 +41,9 @@ impl CalendarMaker {
     /// Start by the days with the least available persons.
     /// When finding a person for a day, remove them from the list of available persons for this day, but also the previous and the next day.
     /// Try all the possibilities, recursively, stopping when all the days are filled.
-    pub fn make_calendar(&mut self, max_subcontractor: u8) {
+    pub fn make_calendar(&mut self, max_subcontractor: u8, verbose: bool) {
         self.max_subcontractor = max_subcontractor;
+        self.verbose = verbose;
         let events = [
             Event::FirstDaily,
             Event::FirstNightly,
@@ -50,10 +52,9 @@ impl CalendarMaker {
         ];
         let all_combinations_of_events = events.iter().permutations(events.len());
         for combination in all_combinations_of_events {
-            // println!(
-            //     "Trying combination {:?}",
-            //     combination
-            // );
+            if self.verbose {
+                println!("Trying combination {:?}", combination);
+            }
             let mut solution_found_for_event = Vec::new();
             // Start with a clear calendar and original availabilities
             let mut calendar = self.calendar.clone();
@@ -67,12 +68,13 @@ impl CalendarMaker {
                 if calendar.get_empty_days(event).is_empty() {
                     solution_found_for_event.push(event);
                 } else {
-                    // println!(" -> No solution found for event {:?}", event);
+                    if self.verbose {
+                        println!(" -> No solution found for event {:?}", event);
+                    }
                     break;
                 }
             }
             if solution_found_for_event.len() == events.len() {
-                // println!(" -> All events have a solution!");
                 self.calendar = calendar;
                 self.availabilities = availabilities;
                 break;
@@ -101,9 +103,12 @@ impl CalendarMaker {
     }
 
     pub fn print_results(&self) {
-        // for (person, availabilities) in &self.availabilities {
-        //     println!("{} {}", person, availabilities.format());
-        // }
+        if self.verbose {
+            for (person, availabilities) in &self.availabilities {
+                println!("{} {}", person, availabilities.format());
+            }
+            println!();
+        }
         self.calendar.print();
     }
 
@@ -299,6 +304,7 @@ impl CalendarMaker {
             availabilities,
             _persons: persons,
             max_subcontractor: 0,
+            verbose: false,
         }
     }
 }

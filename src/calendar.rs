@@ -95,12 +95,14 @@ impl Calendar {
     }
 
     pub fn print(&self) {
-        println!("-----------------");
-        println!(
+        let header = format!(
             "     |{}",
             self.days.keys().fold(String::new(), |acc, x| acc
                 + &format!("  {:0>2}  |", x.day()))
         );
+        println!("{}", header);
+        // print a line of dashes as long as the line of header
+        println!("{}", "-".repeat(header.len()));
         for event in &[
             Event::FirstDaily,
             Event::FirstNightly,
@@ -113,7 +115,6 @@ impl Calendar {
             }
             println!();
         }
-        println!("-----------------");
     }
 }
 

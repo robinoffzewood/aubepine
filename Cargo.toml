@@ -8,4 +8,5 @@ name = "roseraie-planning"
 path = "src/main.rs"
 
 [dependencies]
+itertools = "0.13.0"
 time = "0.3.37"

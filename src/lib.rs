@@ -105,7 +105,7 @@ impl CalendarMaker {
     pub fn print_results(&self) {
         if self.verbose {
             for (person, availabilities) in &self.availabilities {
-                println!("{} {}", person, availabilities.format());
+                println!("{:<5}{}", person, availabilities.format());
             }
             println!();
         }
@@ -179,14 +179,16 @@ impl CalendarMaker {
             let days_with_least_availabilities =
                 Self::get_days_with_least_availabilities(&availabilities, &remaining_days, event);
             if let Some(days) = days_with_least_availabilities {
-                for (day, names) in days {
-                    for name in names {
+                let mut all_combination_of_days = days.iter().permutations(days.len());
+                for (day, names) in all_combination_of_days.next().unwrap() {
+                    let mut all_combinations_of_names = names.iter().permutations(names.len());
+                    for name in all_combinations_of_names.next().unwrap() {
                         let mut new_calendar = calendar.clone();
                         let mut new_availabilities = availabilities.clone();
                         // Set the person for this day, and update her availabilities
-                        new_calendar.set_for(day, event, name.clone());
-                        let her_availabilities = new_availabilities.get_mut(&name).unwrap();
-                        Availabilities::update_availabilities(her_availabilities, day, event);
+                        new_calendar.set_for(*day, event, name.clone());
+                        let her_availabilities = new_availabilities.get_mut(name).unwrap();
+                        Availabilities::update_availabilities(her_availabilities, *day, event);
                         // Continue to find the next person for the next day
                         (new_availabilities, new_calendar) =
                             Self::find_next(new_availabilities, new_calendar, event);
@@ -197,6 +199,7 @@ impl CalendarMaker {
                             return (availabilities, calendar);
                         }
                     }
+                    // println!("No solution found for day {:?}", day);
                 }
             }
         }
@@ -469,11 +472,14 @@ mod tests {
             FirstDaily,
         );
         assert_eq!(availabilities.len(), 4);
+        let mut found_subco = false;
         for a in availabilities {
-            if let Some(days) = a.get("EXT-1D-1") {
+            if let Some(days) = a.get("EXT-1") {
                 assert_eq!(days.get_all().keys().len(), 3);
+                found_subco = true;
             }
         }
+        assert!(found_subco);
     }
 
     #[test]

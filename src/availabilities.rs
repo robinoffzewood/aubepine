@@ -12,7 +12,7 @@ pub struct Availabilities {
 
 impl Availabilities {
     /// Input must contain the name of the person, the level of on-call, and the availabilities, each separated by a comma.
-    /// The valid availabilities are 'x' or 'X'.
+    /// When available, the cell is empty. When not available, there could be 'x', 'v', 'X' or 'V'.
     pub fn from_str(from: Date, line: &str) -> Self {
         Self {
             days: Self::map_from_str(from, line),
@@ -68,7 +68,7 @@ impl Availabilities {
             ),
         };
         for token in availabilities_str.split(",") {
-            if token.is_empty() {
+            if !token.is_empty() {
                 days.insert(day, vec![]);
             } else {
                 days.entry(day)
@@ -156,10 +156,10 @@ mod tests {
     #[test]
     fn test_day_availabilities() {
         let day_1 = Date::from_ordinal_date(2025, 1).unwrap();
-        let str_1j = "1ère SF jour,x,,,,,,,X,";
-        let str_1n = "1ère SF nuit,,x,,,,,,,x";
-        let str_2j = "2ème SF jour,,,,x,,,,,x";
-        let str_2n = "2ème SF nuit,,,,,x,,,x,";
+        let str_1j = "1ère SF jour,,x,x,x,x,x,x,,x";
+        let str_1n = "1ère SF nuit,x,,x,x,x,x,x,x,";
+        let str_2j = "2ème SF jour,x,x,x,,x,x,x,x,";
+        let str_2n = "2ème SF nuit,x,x,x,x,,x,x,,x";
         let mut availabilities = Availabilities::from_str(day_1, str_1j);
         availabilities.merge(day_1, str_1n);
         availabilities.merge(day_1, str_2j);
@@ -215,7 +215,7 @@ mod tests {
     #[test]
     fn test_pop_single_event() {
         let day_1 = Date::from_ordinal_date(2025, 1).unwrap();
-        let str_1j = "1ère SF jour,x,,,,,,,X,";
+        let str_1j = "1ère SF jour,,x,x,x,x,x,x,,x";
 
         let mut availabilities = Availabilities::from_str(day_1, str_1j);
         let a = availabilities.pop_event(&day_1, Event::FirstDaily);
@@ -228,10 +228,10 @@ mod tests {
     #[test]
     fn test_pop_dual_event() {
         let day_1 = Date::from_ordinal_date(2025, 1).unwrap();
-        let str_1j = "1ère SF jour,x,,,,,,,X,";
-        let str_1n = "1ère SF nuit,,,,,,,,,";
-        let str_2j = "2ème SF jour,x,,,,,,,X,";
-        let str_2n = "2ème SF nuit,x,,,,,,,X,";
+        let str_1j = "1ère SF jour,,x,x,x,x,x,x,,x";
+        let str_1n = "1ère SF nuit,x,x,x,x,x,x,x,x,x";
+        let str_2j = "2ème SF jour,,x,x,x,x,x,x,,x";
+        let str_2n = "2ème SF nuit,,x,x,x,x,x,x,,x";
         let mut availabilities = Availabilities::from_str(day_1, str_1j);
         availabilities.merge(day_1, str_1n);
         availabilities.merge(day_1, str_2j);
@@ -249,10 +249,10 @@ mod tests {
         let saturday = Date::from_ordinal_date(2025, 4).unwrap();
         let sunday = Date::from_ordinal_date(2025, 5).unwrap();
 
-        let str_1j = "1ère SF jour,x,x,x,x,x";
-        let str_1n = "1ère SF nuit,x,x,x,x,x";
-        let str_2j = "2ème SF jour,x,x,x,x,x";
-        let str_2n = "2ème SF nuit,x,x,x,x,x";
+        let str_1j = "1ère SF jour,,,,,";
+        let str_1n = "1ère SF nuit,,,,,";
+        let str_2j = "2ème SF jour,,,,,";
+        let str_2n = "2ème SF nuit,,,,,";
 
         let mut availabilities = Availabilities::from_str(wednesday, str_1j);
         availabilities.merge(wednesday, str_1n);

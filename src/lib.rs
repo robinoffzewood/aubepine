@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use availabilities::Availabilities;
 use calendar::{Calendar, Event};
@@ -11,12 +11,14 @@ mod person;
 
 type Name = String;
 type AvailabilitiesPerPerson = HashMap<Name, Availabilities>;
+type ProblematicDays = BTreeMap<(Date, Event), u8>;
 
 #[derive(Debug)]
 pub struct CalendarMaker {
     calendar: Calendar,
     availabilities: AvailabilitiesPerPerson,
     _persons: HashMap<Name, person::Person>,
+    problematic_days: ProblematicDays,
     max_subcontractor: u8,
     verbose: bool,
 }
@@ -44,23 +46,63 @@ impl CalendarMaker {
     pub fn make_calendar(&mut self, max_subcontractor: u8, verbose: bool) {
         self.max_subcontractor = max_subcontractor;
         self.verbose = verbose;
+        for i in 0..=max_subcontractor {
+            if self.verbose {
+                println!("Trying with {} subcontractor(s)", i);
+            }
+            match self.try_all_permutations() {
+                Err(problematic_days) => {
+                    if let Some(most_problematic_day) = problematic_days.iter().max_by_key(|e| e.1)
+                    {
+                        println!(
+                            "Most problematic day / event : {:?} / {:?} ({})",
+                            most_problematic_day.0 .0,
+                            most_problematic_day.0 .1,
+                            most_problematic_day.1
+                        );
+                    }
+                    self.problematic_days = problematic_days.clone();
+                    let most_problematic_day_and_event =
+                        problematic_days.iter().max_by_key(|e| e.1).unwrap().0;
+                    let subco_name = format!("EXT-{}", i);
+                    let new_availabilities = self.add_subco_for_this_day_and_event(
+                        &self.availabilities.clone(),
+                        &subco_name,
+                        most_problematic_day_and_event.0.ordinal(),
+                        most_problematic_day_and_event.1,
+                    );
+                    self.availabilities = new_availabilities;
+                    continue;
+                }
+                Ok((cal, av)) => {
+                    self.calendar = cal;
+                    self.availabilities = av;
+                    break;
+                }
+            }
+        }
+    }
+
+    fn try_all_permutations(&self) -> Result<(Calendar, AvailabilitiesPerPerson), ProblematicDays> {
         let events = [
             Event::FirstDaily,
             Event::FirstNightly,
             Event::SecondDaily,
             Event::SecondNightly,
         ];
-        let all_combinations_of_events = events.iter().permutations(events.len());
-        for combination in all_combinations_of_events {
+        let mut problematic_days = ProblematicDays::new();
+        let all_permutations_of_events = events.iter().permutations(events.len());
+        for permutation in all_permutations_of_events {
             if self.verbose {
-                println!("Trying combination {:?}", combination);
+                println!("Trying permutation {:?}", permutation);
             }
             let mut solution_found_for_event = Vec::new();
             // Start with a clear calendar and original availabilities
             let mut calendar = self.calendar.clone();
             let mut availabilities = self.availabilities.clone();
-            for &event in &combination {
-                (calendar, availabilities) = self.make_calendar_for_event(
+            let mut problematic_day;
+            for &event in &permutation {
+                (calendar, availabilities, problematic_day) = self.make_calendar_for_event(
                     &calendar.clone(),
                     &availabilities.clone(),
                     *event,
@@ -71,15 +113,20 @@ impl CalendarMaker {
                     if self.verbose {
                         println!(" -> No solution found for event {:?}", event);
                     }
+                    if let Some(problematic_day) = problematic_day {
+                        problematic_days
+                            .entry((problematic_day, *event))
+                            .and_modify(|v| *v += 1)
+                            .or_insert(0);
+                    }
                     break;
                 }
             }
             if solution_found_for_event.len() == events.len() {
-                self.calendar = calendar;
-                self.availabilities = availabilities;
-                break;
+                return Ok((calendar, availabilities));
             }
         }
+        Err(problematic_days)
     }
 
     fn make_calendar_for_event(
@@ -87,31 +134,26 @@ impl CalendarMaker {
         calendar: &Calendar,
         availabilities: &AvailabilitiesPerPerson,
         event: Event,
-    ) -> (Calendar, AvailabilitiesPerPerson) {
-        for subco_nb in 0..=self.max_subcontractor {
-            for availabilities_with_subco in
-                self.generate_availabilities_with_subco(&availabilities.clone(), subco_nb, event)
-            {
-                let (new_availabilities, new_calendar) =
-                    Self::find_next(availabilities_with_subco, calendar.clone(), event);
-                if new_calendar.get_empty_days(&event).is_empty() {
-                    return (new_calendar, new_availabilities);
-                }
-            }
+    ) -> (Calendar, AvailabilitiesPerPerson, Option<Date>) {
+        let (new_availabilities, new_calendar, problematic_day, _) =
+            Self::find_next(availabilities.clone(), calendar.clone(), event, 0);
+        if new_calendar.get_empty_days(&event).is_empty() {
+            return (new_calendar, new_availabilities, None);
         }
-        (calendar.clone(), availabilities.clone())
+        (calendar.clone(), availabilities.clone(), problematic_day)
     }
 
     pub fn print_results(&self) {
-        if self.verbose {
-            for (person, availabilities) in &self.availabilities {
-                println!("{:<5}{}", person, availabilities.format());
-            }
-            println!();
-        }
+        // if self.verbose {
+        //     for (person, availabilities) in &self.availabilities {
+        //         println!("{:<5}{}", person, availabilities.format());
+        //     }
+        //     println!();
+        // }
         self.calendar.print();
     }
 
+    #[allow(dead_code)]
     fn generate_availabilities_with_subco(
         &self,
         input_availabilities: &AvailabilitiesPerPerson,
@@ -123,36 +165,14 @@ impl CalendarMaker {
         }
 
         let subco_name = format!("EXT-{}", subcontractor_to_add);
-        // self.persons.insert(
-        //     subco_name.clone(),
-        //     person::Person::new_subcontractor(subco_name.clone()),
-        // );
-
         let mut availabilities_with_subco = vec![input_availabilities.to_owned()];
         for day_ordinal in self.calendar.from().ordinal()..=self.calendar.to().ordinal() {
-            let event_str = match event {
-                Event::FirstDaily => "1ère SF jour,",
-                Event::FirstNightly => "1ère SF nuit,",
-                Event::SecondDaily => "2ème SF jour,",
-                Event::SecondNightly => "2ème SF nuit,",
-            };
-            let mut availabilities_str = event_str.to_string();
-            for _ in self.calendar.from().ordinal()..day_ordinal {
-                availabilities_str.push(',');
-            }
-            availabilities_str.push('x');
-            for _ in day_ordinal..self.calendar.to().ordinal() {
-                availabilities_str.push(',');
-            }
-            let mut extra_availabilities = input_availabilities.clone();
-            extra_availabilities
-                .entry(subco_name.clone())
-                .and_modify(|a| a.merge(self.calendar.from(), &availabilities_str.to_string()))
-                .or_insert(Availabilities::from_str(
-                    self.calendar.from(),
-                    &availabilities_str.to_string(),
-                ));
-            // availabilities_with_subco.push(extra_availabilities.clone());
+            let extra_availabilities = self.add_subco_for_this_day_and_event(
+                input_availabilities,
+                &subco_name,
+                day_ordinal,
+                event,
+            );
             let sub_new_availabilities = self.generate_availabilities_with_subco(
                 &extra_availabilities,
                 subcontractor_to_add - 1,
@@ -163,57 +183,181 @@ impl CalendarMaker {
         availabilities_with_subco
     }
 
+    /// Add a subcontractor for the day and event passed in argument.
+    fn add_subco_for_this_day_and_event(
+        &self,
+        availabilities: &HashMap<String, Availabilities>,
+        subco_name: &str,
+        day_ordinal: u16,
+        event: Event,
+    ) -> AvailabilitiesPerPerson {
+        let event_str = match event {
+            Event::FirstDaily => "1ère SF jour",
+            Event::FirstNightly => "1ère SF nuit",
+            Event::SecondDaily => "2ème SF jour",
+            Event::SecondNightly => "2ème SF nuit",
+        };
+        let mut availabilities_str = event_str.to_string();
+        for _ in self.calendar.from().ordinal()..=day_ordinal - 1 {
+            availabilities_str.push_str(",x");
+        }
+        availabilities_str.push(',');
+        for _ in day_ordinal + 1..=self.calendar.to().ordinal() {
+            availabilities_str.push_str(",x");
+        }
+        let mut new_availabilities = availabilities.clone();
+        new_availabilities
+            .entry(subco_name.to_owned())
+            .and_modify(|a| a.merge(self.calendar.from(), &availabilities_str.to_string()))
+            .or_insert(Availabilities::from_str(
+                self.calendar.from(),
+                &availabilities_str.to_string(),
+            ));
+        new_availabilities
+    }
+
+    /// Recursive function to find the next person for the next empty day
     fn find_next(
         availabilities: AvailabilitiesPerPerson,
         calendar: Calendar,
         event: Event,
-    ) -> (AvailabilitiesPerPerson, Calendar) {
-        let mut availabilities = availabilities.clone();
-        let mut calendar = calendar.clone();
+        recursion_depth: u16,
+    ) -> (AvailabilitiesPerPerson, Calendar, Option<Date>, u16) {
+        let availabilities = availabilities.clone();
+        let calendar = calendar.clone();
+        let mut problematic_day = None;
         let remaining_days = calendar.get_empty_days(&event);
         if !remaining_days.is_empty() {
-            // for (person, availabilities) in &availabilities {
-            //     println!("{} {}", person, availabilities.format());
-            // }
-            // calendar.print();
-            let days_with_least_availabilities =
+            let days_and_names =
                 Self::get_days_with_least_availabilities(&availabilities, &remaining_days, event);
-            if let Some(days) = days_with_least_availabilities {
-                let mut all_combination_of_days = days.iter().permutations(days.len());
-                for (day, names) in all_combination_of_days.next().unwrap() {
-                    let mut all_combinations_of_names = names.iter().permutations(names.len());
-                    for name in all_combinations_of_names.next().unwrap() {
-                        let mut new_calendar = calendar.clone();
-                        let mut new_availabilities = availabilities.clone();
-                        // Set the person for this day, and update her availabilities
-                        new_calendar.set_for(*day, event, name.clone());
-                        let her_availabilities = new_availabilities.get_mut(name).unwrap();
-                        Availabilities::update_availabilities(her_availabilities, *day, event);
-                        // Continue to find the next person for the next day
-                        (new_availabilities, new_calendar) =
-                            Self::find_next(new_availabilities, new_calendar, event);
-                        // Successful end condition is reached, return the result
-                        if new_calendar.get_empty_days(&event).is_empty() {
-                            availabilities = new_availabilities;
-                            calendar = new_calendar;
-                            return (availabilities, calendar);
-                        }
+            // Check for premature stop, if there's 3 consecutive days with only the same person available
+            if Self::check_for_premature_stop(&days_and_names) {
+                return (
+                    availabilities,
+                    calendar,
+                    problematic_day,
+                    recursion_depth + 1,
+                );
+            }
+            let mut all_permutations_of_days =
+                days_and_names.iter().permutations(days_and_names.len());
+            for (day, names) in all_permutations_of_days.next().unwrap() {
+                problematic_day = Some(*day);
+                if names.is_empty() {
+                    // No more possibilities, return the current state
+                    return (
+                        availabilities,
+                        calendar,
+                        problematic_day,
+                        recursion_depth + 1,
+                    );
+                }
+                let sorted_by_least_on_call = Self::sort_names_by_least_on_call(names, &calendar);
+                let mut all_permutations_of_names = sorted_by_least_on_call
+                    .iter()
+                    .permutations(sorted_by_least_on_call.len());
+                for name in all_permutations_of_names.next().unwrap() {
+                    let mut new_calendar = calendar.clone();
+                    let mut new_availabilities = availabilities.clone();
+                    let new_recursion_depth;
+                    // Set the person for this day, and update her availabilities
+                    new_calendar.set_for(*day, event, name.clone());
+                    let her_availabilities = new_availabilities.get_mut(name).unwrap();
+                    Availabilities::update_availabilities(her_availabilities, *day, event);
+                    // Continue to find the next person for the next day
+                    (
+                        new_availabilities,
+                        new_calendar,
+                        problematic_day,
+                        new_recursion_depth,
+                    ) = Self::find_next(
+                        new_availabilities,
+                        new_calendar,
+                        event,
+                        recursion_depth + 1,
+                    );
+                    // Successful end condition is reached, return the result
+                    if new_calendar.get_empty_days(&event).is_empty() {
+                        return (new_availabilities, new_calendar, None, new_recursion_depth);
                     }
-                    // println!("No solution found for day {:?}", day);
                 }
             }
         }
-        (availabilities, calendar)
+        (availabilities, calendar, problematic_day, recursion_depth)
+    }
+
+    /// Sort the names by the least on-call days, allow to balance the on-call days between all the persons
+    fn sort_names_by_least_on_call(names: &[Name], calendar: &Calendar) -> Vec<Name> {
+        let mut names_and_count = HashMap::new();
+        for name in names.iter() {
+            let count = calendar
+                .get_all()
+                .values()
+                .filter(|f| Self::is_on_call(f, name))
+                .count();
+            names_and_count.insert(name, count);
+        }
+        let sorted_names = names
+            .iter()
+            .sorted_by_key(|n| names_and_count.get(n).unwrap())
+            .cloned()
+            .collect();
+        sorted_names
+    }
+
+    /// Return true if the person designated by `name` is on call in one of the event passed in argument `availabilities`
+    fn is_on_call(availabilities: &HashMap<Event, Name>, name: &Name) -> bool {
+        for event in [
+            Event::FirstDaily,
+            Event::FirstNightly,
+            Event::SecondDaily,
+            Event::SecondNightly,
+        ] {
+            if let Some(on_call) = availabilities.get(&event) {
+                if name == on_call {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Return true if there's 2 consecutive week days with only the same person available
+    fn check_for_premature_stop(days_and_names: &[(Date, Vec<Name>)]) -> bool {
+        if days_and_names.len() < 2 {
+            return false;
+        }
+        for i in 0..days_and_names.len() - 1 {
+            // continue if there's more than one person available
+            if days_and_names[i].1.len() != 1 {
+                continue;
+            }
+            // Continue if one of the day is a week-end
+            if Self::is_weekend(days_and_names[i].0) || Self::is_weekend(days_and_names[i + 1].0) {
+                continue;
+            }
+            // Return true if there's 2 consecutive days with only the same person available
+            if days_and_names[i].1 == days_and_names[i + 1].1 {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Returns true if the day is in the week-end (saturday or sunday)
+    fn is_weekend(day: Date) -> bool {
+        day.weekday() == time::Weekday::Saturday || day.weekday() == time::Weekday::Sunday
     }
 
     fn get_days_with_least_availabilities(
         availabilities: &AvailabilitiesPerPerson,
-        within_days: &Vec<Date>,
+        within_days: &[Date],
         event: Event,
-    ) -> Option<Vec<(Date, Vec<Name>)>> {
+    ) -> Vec<(Date, Vec<Name>)> {
         let mut availabilities_per_day = HashMap::new();
         let mut days_per_availabilities = HashMap::new();
-        for day in within_days {
+        // Sorting the days allow to have a deterministic result
+        for day in within_days.iter().sorted() {
             let mut persons = Vec::new();
             for (name, availabilities) in availabilities {
                 if availabilities
@@ -232,15 +376,14 @@ impl CalendarMaker {
                 .or_insert(vec![day]);
         }
         let &least = days_per_availabilities.keys().min().expect("No day found");
-        if least == 0 {
-            return None;
-        }
         let mut days_and_names = Vec::new();
         for &day in days_per_availabilities.get(&least).unwrap() {
             let names = availabilities_per_day.get(day).unwrap();
-            days_and_names.push((*day, names.to_owned()));
+            // Sorting the names allow to have a deterministic result
+            let sorted_names = names.iter().cloned().sorted().collect();
+            days_and_names.push((*day, sorted_names));
         }
-        Some(days_and_names)
+        days_and_names
     }
 
     fn from_lines(lines: &mut std::str::Lines) -> Self {
@@ -306,6 +449,7 @@ impl CalendarMaker {
             calendar,
             availabilities,
             _persons: persons,
+            problematic_days: BTreeMap::new(),
             max_subcontractor: 0,
             verbose: false,
         }
@@ -320,7 +464,7 @@ mod tests {
     #[test]
     fn test_from_lines() {
         let content =
-            "JANVIER,2025,1,2,3,4,5\r\nAlice,1ère SF jour,x,x,x,,\r\nAlice,1ère SF nuit,,x,x,,x\r\n";
+            "JANVIER,2025,1,2,3,4,5\r\nAlice,1ère SF jour,,,,x,x\r\nAlice,1ère SF nuit,x,,,x,\r\n";
         let calendar_maker = CalendarMaker::from_lines(&mut content.lines());
         assert!(calendar_maker.calendar.from() == Date::from_ordinal_date(2025, 1).unwrap());
         assert!(calendar_maker.calendar.get_all().len() == 5);
@@ -349,18 +493,17 @@ mod tests {
     #[test]
     fn test_get_day_with_least_availabilities_single() {
         let content =
-            "JANVIER,2025,1,2,3\r\nAlice,1ère SF jour,x,x,x\r\nBob,1ère SF jour,x,x,\r\nCharlie,1ère SF jour,x,,\r\n";
+            "JANVIER,2025,1,2,3\r\nAlice,1ère SF jour,,,\r\nBob,1ère SF jour,,,x\r\nCharlie,1ère SF jour,,x,x\r\n";
         let calendar_maker = CalendarMaker::from_lines(&mut content.lines());
         let day_with_least_availabilities = CalendarMaker::get_days_with_least_availabilities(
             &calendar_maker.availabilities,
-            &vec![
+            &[
                 Date::from_ordinal_date(2025, 1).unwrap(),
                 Date::from_ordinal_date(2025, 2).unwrap(),
                 Date::from_ordinal_date(2025, 3).unwrap(),
             ],
             FirstDaily,
-        )
-        .unwrap();
+        );
         assert_eq!(day_with_least_availabilities.len(), 1);
         assert_eq!(
             day_with_least_availabilities[0].0,
@@ -370,11 +513,11 @@ mod tests {
     #[test]
     fn test_get_day_with_least_availabilities_none() {
         let content =
-            "JANVIER,2025,1,2,3\r\nAlice,1ère SF jour,,,\r\nBob,1ère SF jour,,,\r\nCharlie,1ère SF jour,,,\r\n";
+            "JANVIER,2025,1,2,3\r\nAlice,1ère SF jour,x,x,x\r\nBob,1ère SF jour,x,x,x\r\nCharlie,1ère SF jour,x,x,x\r\n";
         let calendar_maker = CalendarMaker::from_lines(&mut content.lines());
         let day_with_least_availabilities = CalendarMaker::get_days_with_least_availabilities(
             &calendar_maker.availabilities,
-            &vec![
+            &[
                 Date::from_ordinal_date(2025, 1).unwrap(),
                 Date::from_ordinal_date(2025, 2).unwrap(),
                 Date::from_ordinal_date(2025, 3).unwrap(),
@@ -382,24 +525,23 @@ mod tests {
             FirstDaily,
         );
         println!("{:?}", day_with_least_availabilities);
-        assert!(day_with_least_availabilities.is_none());
+        assert!(day_with_least_availabilities.first().unwrap().1.is_empty());
     }
 
     #[test]
     fn test_get_day_with_least_availabilities_dual() {
         let content =
-            "JANVIER,2025,1,2,3\r\nAlice,1ère SF jour,x,x,x\r\nBob,1ère SF jour,x,,\r\nCharlie,1ère SF jour,x,,\r\n";
+            "JANVIER,2025,1,2,3\r\nAlice,1ère SF jour,,,\r\nBob,1ère SF jour,,x,x\r\nCharlie,1ère SF jour,,x,x\r\n";
         let calendar_maker = CalendarMaker::from_lines(&mut content.lines());
         let day_with_least_availabilities = CalendarMaker::get_days_with_least_availabilities(
             &calendar_maker.availabilities,
-            &vec![
+            &[
                 Date::from_ordinal_date(2025, 1).unwrap(),
                 Date::from_ordinal_date(2025, 2).unwrap(),
                 Date::from_ordinal_date(2025, 3).unwrap(),
             ],
             FirstDaily,
-        )
-        .unwrap();
+        );
         assert_eq!(
             day_with_least_availabilities.clone()[0].0,
             Date::from_ordinal_date(2025, 2).unwrap()
@@ -412,13 +554,14 @@ mod tests {
 
     #[test]
     fn test_make_calendar_2_persons() {
-        let content = "JANVIER,2025,1,2,3\r\nAlice,1ère SF jour,x,,x\r\nBob,1ère SF jour,x,x,,\r\n";
+        let content = "JANVIER,2025,1,2,3\r\nAlice,1ère SF jour,,x,\r\nBob,1ère SF jour,,,x,\r\n";
         let calendar_maker = CalendarMaker::from_lines(&mut content.lines());
 
-        let (_, new_calendar) = CalendarMaker::find_next(
+        let (_, new_calendar, _, _) = CalendarMaker::find_next(
             calendar_maker.availabilities.clone(),
             calendar_maker.calendar.clone(),
             Event::FirstDaily,
+            0,
         );
         assert!(new_calendar.get_empty_days(&Event::FirstDaily).is_empty()); // all days are filled
         assert!(
@@ -443,13 +586,14 @@ mod tests {
 
     #[test]
     fn test_make_calendar_3_persons() {
-        let content = "JANVIER,2025,1,2,3,4,5,6,7\r\nAlice,1ère SF jour,x,x,x,x,,,x\r\nBob,1ère SF jour,,,x,,,x,x\r\nCharlie,1ère SF jour,,x,,,x,x,\r\n";
+        let content = "JANVIER,2025,1,2,3,4,5,6,7\r\nAlice,1ère SF jour,,,,,x,x,\r\nBob,1ère SF jour,x,x,,x,x,,\r\nCharlie,1ère SF jour,x,,x,x,,,x\r\n";
         let calendar_maker = CalendarMaker::from_lines(&mut content.lines());
 
-        let (_, new_calendar) = CalendarMaker::find_next(
+        let (_, new_calendar, _, _) = CalendarMaker::find_next(
             calendar_maker.availabilities.clone(),
             calendar_maker.calendar.clone(),
             Event::FirstDaily,
+            0,
         );
         assert!(new_calendar.get_empty_days(&Event::FirstDaily).is_empty());
         assert_eq!(
@@ -464,7 +608,7 @@ mod tests {
 
     #[test]
     fn test_generate_availabilities_with_one_subco() {
-        let content = "JANVIER,2025,5,6,7\r\nAlice,1ère SF jour,x,x,x\r\nBob,1ère SF jour,x,x,\r\nCharlie,1ère SF jour,x,,\r\n";
+        let content = "JANVIER,2025,5,6,7\r\nAlice,1ère SF jour,,,\r\nBob,1ère SF jour,,,x\r\nCharlie,1ère SF jour,,x,x\r\n";
         let calendar_maker = CalendarMaker::from_lines(&mut content.lines());
         let availabilities = calendar_maker.generate_availabilities_with_subco(
             &calendar_maker.availabilities.clone(),
@@ -484,7 +628,7 @@ mod tests {
 
     #[test]
     fn test_generate_availabilities_with_two_subco() {
-        let content = "JANVIER,2025,5,6,7\r\nAlice,1ère SF jour,x,x,x\r\nBob,1ère SF jour,x,x,\r\nCharlie,1ère SF jour,x,,\r\n";
+        let content = "JANVIER,2025,5,6,7\r\nAlice,1ère SF jour,,,\r\nBob,1ère SF jour,,,x\r\nCharlie,1ère SF jour,,x,x\r\n";
         let calendar_maker = CalendarMaker::from_lines(&mut content.lines());
         let availabilities = calendar_maker.generate_availabilities_with_subco(
             &calendar_maker.availabilities.clone(),
@@ -559,5 +703,26 @@ mod tests {
                     .contains(&FirstDaily));
             }
         }
+    }
+
+    #[test]
+    fn test_sort_names_by_least_on_call() {
+        let content = "JANVIER,2025,1,2,3,4,5,6,7\r\nAlice,1ère SF jour,,,,,x,x,\r\nBob,1ère SF jour,x,x,,x,x,,\r\nCharlie,1ère SF jour,x,,x,x,,,x\r\n";
+        let calendar_maker = CalendarMaker::from_lines(&mut content.lines());
+
+        let (_, new_calendar, _, _) = CalendarMaker::find_next(
+            calendar_maker.availabilities.clone(),
+            calendar_maker.calendar.clone(),
+            Event::FirstDaily,
+            0,
+        );
+        let names = vec![
+            "Alice".to_string(),
+            "Bob".to_string(),
+            "Charlie".to_string(),
+        ];
+        // Expected result for on-call allocation is ["Alice", "Charlie", "Bob", "Alice", "Charlie", "Bob", "Alice"]
+        let sorted_names = CalendarMaker::sort_names_by_least_on_call(&names, &new_calendar);
+        assert_eq!(sorted_names, vec!["Bob", "Charlie", "Alice"]);
     }
 }

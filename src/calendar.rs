@@ -14,7 +14,7 @@ use time::Date;
 
 use crate::Name;
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, PartialOrd, Ord)]
 pub enum Event {
     FirstDaily,
     FirstNightly,

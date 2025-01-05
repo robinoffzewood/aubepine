@@ -7,7 +7,6 @@ use time::Date;
 
 mod availabilities;
 mod calendar;
-mod person;
 
 type Name = String;
 type AvailabilitiesPerPerson = HashMap<Name, Availabilities>;
@@ -17,7 +16,6 @@ type ProblematicDays = BTreeMap<(Date, Event), u8>;
 pub struct CalendarMaker {
     calendar: Calendar,
     availabilities: AvailabilitiesPerPerson,
-    _persons: HashMap<Name, person::Person>,
     problematic_days: ProblematicDays,
     max_subcontractor: u8,
     verbose: bool,
@@ -43,6 +41,7 @@ impl CalendarMaker {
     /// Start by the days with the least available persons.
     /// When finding a person for a day, remove them from the list of available persons for this day, but also the previous and the next day.
     /// Try all the possibilities, recursively, stopping when all the days are filled.
+    /// Try first without adding extra ressources, then add one subcontractor, then two, etc. up to the maximum number of subcontractors passed as argument.
     pub fn make_calendar(&mut self, max_subcontractor: u8, verbose: bool) {
         self.max_subcontractor = max_subcontractor;
         self.verbose = verbose;
@@ -83,6 +82,7 @@ impl CalendarMaker {
         }
     }
 
+    /// Try all the permutations of the events, and return the first solution found.
     fn try_all_permutations(&self) -> Result<(Calendar, AvailabilitiesPerPerson), ProblematicDays> {
         let events = [
             Event::FirstDaily,
@@ -143,44 +143,8 @@ impl CalendarMaker {
         (calendar.clone(), availabilities.clone(), problematic_day)
     }
 
-    pub fn print_results(&self) {
-        // if self.verbose {
-        //     for (person, availabilities) in &self.availabilities {
-        //         println!("{:<5}{}", person, availabilities.format());
-        //     }
-        //     println!();
-        // }
-        self.calendar.print();
-    }
-
-    #[allow(dead_code)]
-    fn generate_availabilities_with_subco(
-        &self,
-        input_availabilities: &AvailabilitiesPerPerson,
-        subcontractor_to_add: u8,
-        event: Event,
-    ) -> Vec<AvailabilitiesPerPerson> {
-        if subcontractor_to_add == 0 {
-            return vec![input_availabilities.to_owned()];
-        }
-
-        let subco_name = format!("EXT-{}", subcontractor_to_add);
-        let mut availabilities_with_subco = vec![input_availabilities.to_owned()];
-        for day_ordinal in self.calendar.from().ordinal()..=self.calendar.to().ordinal() {
-            let extra_availabilities = self.add_subco_for_this_day_and_event(
-                input_availabilities,
-                &subco_name,
-                day_ordinal,
-                event,
-            );
-            let sub_new_availabilities = self.generate_availabilities_with_subco(
-                &extra_availabilities,
-                subcontractor_to_add - 1,
-                event,
-            );
-            availabilities_with_subco.extend(sub_new_availabilities);
-        }
-        availabilities_with_subco
+    pub fn calendar_as_string(&self) -> String {
+        self.calendar.to_string()
     }
 
     /// Add a subcontractor for the day and event passed in argument.
@@ -349,6 +313,7 @@ impl CalendarMaker {
         day.weekday() == time::Weekday::Saturday || day.weekday() == time::Weekday::Sunday
     }
 
+    /// Return the days with the least availabilities for the event passed in argument
     fn get_days_with_least_availabilities(
         availabilities: &AvailabilitiesPerPerson,
         within_days: &[Date],
@@ -424,20 +389,10 @@ impl CalendarMaker {
         let calendar = Calendar::new(from, to);
 
         let mut availabilities = HashMap::new();
-        let mut persons = HashMap::new();
         while let Some(line) = lines.next().as_mut() {
             let (name, availabilities_str) = line.split_once(",").expect("Name missing");
-            let name = name.to_string();
-            if name.starts_with("EXT") {
-                persons.insert(
-                    name.clone(),
-                    person::Person::new_subcontractor(name.clone()),
-                );
-            } else {
-                persons.insert(name.clone(), person::Person::new_employee(name.clone()));
-            }
             availabilities
-                .entry(name)
+                .entry(name.to_string())
                 .and_modify(|a: &mut Availabilities| a.merge(calendar.from(), availabilities_str))
                 .or_insert(Availabilities::from_str(
                     calendar.from(),
@@ -448,7 +403,6 @@ impl CalendarMaker {
         Self {
             calendar,
             availabilities,
-            _persons: persons,
             problematic_days: BTreeMap::new(),
             max_subcontractor: 0,
             verbose: false,
@@ -468,7 +422,6 @@ mod tests {
         let calendar_maker = CalendarMaker::from_lines(&mut content.lines());
         assert!(calendar_maker.calendar.from() == Date::from_ordinal_date(2025, 1).unwrap());
         assert!(calendar_maker.calendar.get_all().len() == 5);
-        assert!(calendar_maker._persons.contains_key("Alice"));
         assert!(calendar_maker.availabilities.keys().any(|a| a == "Alice"));
         assert!(
             calendar_maker
@@ -604,105 +557,6 @@ mod tests {
                 .collect::<Vec<&Name>>(),
             vec!["Alice", "Charlie", "Bob", "Alice", "Charlie", "Bob", "Alice"]
         );
-    }
-
-    #[test]
-    fn test_generate_availabilities_with_one_subco() {
-        let content = "JANVIER,2025,5,6,7\r\nAlice,1ère SF jour,,,\r\nBob,1ère SF jour,,,x\r\nCharlie,1ère SF jour,,x,x\r\n";
-        let calendar_maker = CalendarMaker::from_lines(&mut content.lines());
-        let availabilities = calendar_maker.generate_availabilities_with_subco(
-            &calendar_maker.availabilities.clone(),
-            1,
-            FirstDaily,
-        );
-        assert_eq!(availabilities.len(), 4);
-        let mut found_subco = false;
-        for a in availabilities {
-            if let Some(days) = a.get("EXT-1") {
-                assert_eq!(days.get_all().keys().len(), 3);
-                found_subco = true;
-            }
-        }
-        assert!(found_subco);
-    }
-
-    #[test]
-    fn test_generate_availabilities_with_two_subco() {
-        let content = "JANVIER,2025,5,6,7\r\nAlice,1ère SF jour,,,\r\nBob,1ère SF jour,,,x\r\nCharlie,1ère SF jour,,x,x\r\n";
-        let calendar_maker = CalendarMaker::from_lines(&mut content.lines());
-        let availabilities = calendar_maker.generate_availabilities_with_subco(
-            &calendar_maker.availabilities.clone(),
-            2,
-            FirstDaily,
-        );
-        // Without subco = 1
-        // with one subco = 3
-        // with two subco = 3 * 3 = 9
-        assert_eq!(availabilities.len(), 13);
-
-        let day_5 = Date::from_ordinal_date(2025, 5).unwrap();
-        let day_6 = Date::from_ordinal_date(2025, 6).unwrap();
-        let day_7 = Date::from_ordinal_date(2025, 7).unwrap();
-        for (i, a) in availabilities.iter().enumerate() {
-            if i == 0 {
-                assert!(a.get("EXT-1").is_none());
-                assert!(a.get("EXT-2").is_none());
-            }
-            // Check the EXT-2 is there
-            if (1..=4).contains(&i) {
-                assert!(a
-                    .get("EXT-2")
-                    .unwrap()
-                    .get(&day_5)
-                    .unwrap()
-                    .contains(&FirstDaily));
-            }
-            if (5..=8).contains(&i) {
-                assert!(a
-                    .get("EXT-2")
-                    .unwrap()
-                    .get(&day_6)
-                    .unwrap()
-                    .contains(&FirstDaily));
-            }
-            if (9..=12).contains(&i) {
-                assert!(a
-                    .get("EXT-2")
-                    .unwrap()
-                    .get(&day_7)
-                    .unwrap()
-                    .contains(&FirstDaily));
-            }
-            // Check for the EXT-1 absence
-            if [1, 5, 9].contains(&i) {
-                assert!(a.get("EXT-1").is_none());
-            }
-            // Check for the EXT-1 presence
-            if [2, 6, 10].contains(&i) {
-                assert!(a
-                    .get("EXT-1")
-                    .unwrap()
-                    .get(&day_5)
-                    .unwrap()
-                    .contains(&FirstDaily));
-            }
-            if [3, 7, 11].contains(&i) {
-                assert!(a
-                    .get("EXT-1")
-                    .unwrap()
-                    .get(&day_6)
-                    .unwrap()
-                    .contains(&FirstDaily));
-            }
-            if [4, 8, 12].contains(&i) {
-                assert!(a
-                    .get("EXT-1")
-                    .unwrap()
-                    .get(&day_7)
-                    .unwrap()
-                    .contains(&FirstDaily));
-            }
-        }
     }
 
     #[test]

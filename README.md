@@ -14,6 +14,6 @@ Aubépine is a Rust project designed to create and manage calendars based on ava
 To install the project, clone the repository and build it using Cargo:
 
 ```sh
-git clone git@github.com:robinoffzewood/roseraie-planning.git
-cd roseraie-planning
+git clone git@github.com:robinoffzewood/aubepine.git
+cd aubepine
 cargo build

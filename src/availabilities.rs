@@ -33,7 +33,7 @@ impl Availabilities {
         self.days.get(day)
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Used in unit tests only
     pub fn get_all(&self) -> &HashMap<Date, Vec<Event>> {
         &self.days
     }

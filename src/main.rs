@@ -25,7 +25,7 @@ fn main() {
 
     let mut calendar_maker = CalendarMaker::from_file(&args.filename);
     calendar_maker.make_calendar(args.subco, args.verbose);
-    calendar_maker.print_results();
+    println!("{}", calendar_maker.calendar_as_string());
 
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);

@@ -61,12 +61,11 @@ impl Calendar {
         self.to
     }
 
-    #[allow(dead_code)]
     pub fn get_all(&self) -> &BTreeMap<Date, HashMap<Event, Name>> {
         &self.days
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code)] // used in unit tests only
     pub fn get_for(&self, day: &Date, event: &Event) -> Option<&Name> {
         self.days.get(day)?.get(event)
     }
@@ -93,28 +92,34 @@ impl Calendar {
         }
         missing
     }
+}
 
-    pub fn print(&self) {
+impl fmt::Display for Calendar {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut s = String::new();
         let header = format!(
             "     |{}",
             self.days.keys().fold(String::new(), |acc, x| acc
                 + &format!("  {:0>2}  |", x.day()))
         );
-        println!("{}", header);
+        s.push_str(format!("{}\r\n", header).as_str());
         // print a line of dashes as long as the line of header
-        println!("{}", "-".repeat(header.len()));
+        s.push_str(format!("{}\r\n", "-".repeat(header.len())).as_str());
         for event in &[
             Event::FirstDaily,
             Event::FirstNightly,
             Event::SecondDaily,
             Event::SecondNightly,
         ] {
-            print!("{}    |", event);
+            s.push_str(format!("{}    |", event).as_str());
             for events in self.days.values() {
-                print!(" {:<5}|", events.get(event).unwrap_or(&"   ".to_string()));
+                s.push_str(
+                    format!(" {:<5}|", events.get(event).unwrap_or(&"   ".to_string())).as_str(),
+                );
             }
-            println!();
+            s.push_str("\r\n");
         }
+        write!(f, "{}", s)
     }
 }
 

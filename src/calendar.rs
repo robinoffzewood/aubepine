@@ -92,8 +92,10 @@ impl Calendar {
         }
         missing
     }
+}
 
-    pub fn to_string(&self) -> String {
+impl fmt::Display for Calendar {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut s = String::new();
         let header = format!(
             "     |{}",
@@ -117,7 +119,7 @@ impl Calendar {
             }
             s.push_str("\r\n");
         }
-        s
+        write!(f, "{}", s)
     }
 }
 

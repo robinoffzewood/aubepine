@@ -194,8 +194,8 @@ impl CalendarMaker {
         if !remaining_days.is_empty() {
             let days_and_names =
                 Self::get_days_with_least_availabilities(&availabilities, &remaining_days, event);
-            // Check for premature stop, if there's 3 consecutive days with only the same person available
-            if Self::check_for_premature_stop(&days_and_names) {
+            // Check for premature stop, if there's 2 consecutive days with only the same person available
+            if Self::check_for_premature_stop(&days_and_names, &event) {
                 return (
                     availabilities,
                     calendar,
@@ -216,6 +216,10 @@ impl CalendarMaker {
                         recursion_depth + 1,
                     );
                 }
+                // println!(
+                //     "Recursion depth: {}, Event: {:?}, Day: {}, Names: {:?}",
+                //     recursion_depth, event, day, names
+                // );
                 let sorted_by_least_on_call = Self::sort_names_by_least_on_call(names, &calendar);
                 let mut all_permutations_of_names = sorted_by_least_on_call
                     .iter()
@@ -287,7 +291,7 @@ impl CalendarMaker {
     }
 
     /// Return true if there's 2 consecutive week days with only the same person available
-    fn check_for_premature_stop(days_and_names: &[(Date, Vec<Name>)]) -> bool {
+    fn check_for_premature_stop(days_and_names: &[(Date, Vec<Name>)], event: &Event) -> bool {
         if days_and_names.len() < 2 {
             return false;
         }
@@ -296,12 +300,21 @@ impl CalendarMaker {
             if days_and_names[i].1.len() != 1 {
                 continue;
             }
-            // Continue if one of the day is a week-end
-            if Self::is_weekend(days_and_names[i].0) || Self::is_weekend(days_and_names[i + 1].0) {
+            // Continue if one of the day is a week-end, and we're searching a person available for a Second level event
+            let is_second_level = event == &Event::SecondDaily || event == &Event::SecondNightly;
+            let one_of_the_day_is_weekend =
+                Self::is_weekend(days_and_names[i].0) || Self::is_weekend(days_and_names[i + 1].0);
+            if one_of_the_day_is_weekend && is_second_level {
                 continue;
             }
             // Return true if there's 2 consecutive days with only the same person available
-            if days_and_names[i].1 == days_and_names[i + 1].1 {
+            let are_consecutive_days = days_and_names[i]
+                .0
+                .ordinal()
+                .abs_diff(days_and_names[i + 1].0.ordinal())
+                == 1;
+            let is_same_person = days_and_names[i].1 == days_and_names[i + 1].1;
+            if are_consecutive_days && is_same_person {
                 return true;
             }
         }
@@ -548,6 +561,7 @@ mod tests {
             Event::FirstDaily,
             0,
         );
+        println!("{}", new_calendar.to_string());
         assert!(new_calendar.get_empty_days(&Event::FirstDaily).is_empty());
         assert_eq!(
             new_calendar
@@ -575,7 +589,6 @@ mod tests {
             "Bob".to_string(),
             "Charlie".to_string(),
         ];
-        // Expected result for on-call allocation is ["Alice", "Charlie", "Bob", "Alice", "Charlie", "Bob", "Alice"]
         let sorted_names = CalendarMaker::sort_names_by_least_on_call(&names, &new_calendar);
         assert_eq!(sorted_names, vec!["Bob", "Charlie", "Alice"]);
     }

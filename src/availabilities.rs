@@ -68,12 +68,17 @@ impl Availabilities {
             ),
         };
         for token in availabilities_str.split(",") {
-            if !token.is_empty() {
-                days.insert(day, vec![]);
-            } else {
+            let token_lower_case = token.to_ascii_lowercase();
+            let is_available = token.is_empty()
+                || token_lower_case == "p"
+                || token_lower_case == "pj"
+                || token_lower_case == "pn";
+            if is_available {
                 days.entry(day)
                     .and_modify(|v: &mut Vec<Event>| v.push(level))
                     .or_insert(vec![level]);
+            } else {
+                days.insert(day, vec![]);
             }
             day = day.next_day().unwrap();
         }

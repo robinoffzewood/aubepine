@@ -1,6 +1,6 @@
 # Aubépine
 
-Aubépine is a Rust project designed to create and manage calendars based on availabilities and events. It ensures that all days are filled with the appropriate events and persons, following specific rules.
+Aubépine is a Rust project designed to create calendars fo on-call persons based on their availabilities. It ensures that all days are filled with the appropriate events and persons, following specific rules.
 
 ## Features
 

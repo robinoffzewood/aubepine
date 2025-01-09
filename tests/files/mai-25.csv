@@ -27,7 +27,7 @@ SOP,1ère SF jour,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x
 SOP,1ère SF nuit,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x
 SOP,2ème SF jour,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x
 SOP,2ème SF nuit,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x
-CIN,1ère SF jour,1,,,,,,x,X,,,,,,X,X,,,,,,x,x,,,,,,,,,
+CIN,1ère SF jour,,,,,,,x,X,,,,,,X,X,,,,,,x,x,,,,,,,,,
 CIN,1ère SF nuit,,,,,,x,,,,,,,x,,,,,,,x,,,,,,,,x,x,x,x
 CIN,2ème SF jour,,,,,,,x,x,,,,,,x,x,,,,,,x,x,,,,,,,,,
 CIN,2ème SF nuit,,,,,,x,,,,,,,x,,,,,,,x,,,,,,,,,,,

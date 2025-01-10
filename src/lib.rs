@@ -561,7 +561,6 @@ mod tests {
             Event::FirstDaily,
             0,
         );
-        println!("{}", new_calendar.to_string());
         assert!(new_calendar.get_empty_days(&Event::FirstDaily).is_empty());
         assert_eq!(
             new_calendar

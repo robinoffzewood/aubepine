@@ -8,6 +8,7 @@ Aubépine is a Rust project designed to create calendars fo on-call persons base
 - Manage availabilities for multiple persons
 - Ensure no person is on-call for consecutive days or events
 - Add subcontractors to fill gaps in the calendar
+- If some days are already allocated for on-call (with '1' in the cell), takes it into account. 
 
 ## Installation
 

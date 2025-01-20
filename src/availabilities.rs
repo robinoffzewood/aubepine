@@ -57,7 +57,7 @@ impl Availabilities {
         let mut on_calls = HashMap::new();
         let mut day = from;
         let (availabilities_str, level) = extract_availability_info(line);
-        for token in availabilities_str.split(",") {
+        for token in availabilities_str.split([',', ';']) {
             if token == "1" {
                 on_calls.insert(day, level);
             }
@@ -70,7 +70,7 @@ impl Availabilities {
         let mut days = HashMap::new();
         let mut day = from;
         let (availabilities_str, level) = extract_availability_info(line);
-        for token in availabilities_str.split(",") {
+        for token in availabilities_str.split([',', ';']) {
             let token_lower_case = token.to_ascii_lowercase();
             let is_available = token.is_empty()
                 || token_lower_case == "p"
@@ -159,7 +159,7 @@ impl Availabilities {
 }
 
 fn extract_availability_info(line: &str) -> (&str, Event) {
-    let (level_str, availabilities_str) = line.split_once(",").unwrap();
+    let (level_str, availabilities_str) = line.split_once([',', ';']).unwrap();
     let level = match level_str {
         "1ère SF jour" => Event::FirstDaily,
         "1ère SF nuit" => Event::FirstNightly,

@@ -89,7 +89,7 @@ impl CalendarMaker {
         // Skip the first line, it's the header
         let lines = lines.skip(1);
         for line in lines {
-            let (name, availabilities_str) = line.split_once(",").expect("Name missing");
+            let (name, availabilities_str) = line.split_once([',', ';']).expect("Name missing");
             let on_call_allocations =
                 Availabilities::parse_initial_allocations(self.calendar.from(), availabilities_str);
             for (day, event) in on_call_allocations {
@@ -388,7 +388,7 @@ impl CalendarMaker {
         let mut year = None;
         let mut first_day = None;
         let mut last_day = None;
-        for (i, token) in first_line.split(",").enumerate() {
+        for (i, token) in first_line.split(&[',', ';']).enumerate() {
             if i == 0 {
                 match token.to_ascii_uppercase().as_str() {
                     "JANVIER" => month = Some(time::Month::January),
@@ -421,7 +421,7 @@ impl CalendarMaker {
 
         let mut availabilities = HashMap::new();
         while let Some(line) = lines.next().as_mut() {
-            let (name, availabilities_str) = line.split_once(",").expect("Name missing");
+            let (name, availabilities_str) = line.split_once([',', ';']).expect("Name missing");
             availabilities
                 .entry(name.to_string())
                 .and_modify(|a: &mut Availabilities| a.merge(calendar.from(), availabilities_str))

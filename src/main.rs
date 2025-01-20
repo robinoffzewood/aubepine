@@ -1,5 +1,5 @@
+use aubepine::CalendarMaker;
 use clap::Parser;
-use roseraie_planning::CalendarMaker;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]

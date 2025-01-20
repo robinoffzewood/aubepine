@@ -25,12 +25,15 @@ impl CalendarMaker {
     /// First row contains the month, the year and the days of the week, separated by commas.
     /// The following rows contain the name of the person and the availabilities for each day, each separated by a comma.
     pub fn from_file(filename: &str) -> Self {
+        let mut calendar_maker;
         // Use first row to build the calendar
         let file_content = std::fs::read_to_string(filename).expect("Could not read file");
         let file_content = file_content
             .strip_prefix("\u{feff}")
             .unwrap_or(&file_content);
-        Self::from_lines(&mut file_content.lines())
+        calendar_maker = Self::from_lines(&mut file_content.lines());
+        calendar_maker.take_initial_allocations(file_content.lines());
+        calendar_maker
     }
 
     /// Fill the calendar, in order to have one person per day and per event. To find who can be on-call, use the availabilities of each person.
@@ -78,6 +81,21 @@ impl CalendarMaker {
                     self.availabilities = av;
                     break;
                 }
+            }
+        }
+    }
+
+    fn take_initial_allocations(&mut self, lines: std::str::Lines) {
+        // Skip the first line, it's the header
+        let lines = lines.skip(1);
+        for line in lines {
+            let (name, availabilities_str) = line.split_once(",").expect("Name missing");
+            let on_call_allocations =
+                Availabilities::parse_initial_allocations(self.calendar.from(), availabilities_str);
+            for (day, event) in on_call_allocations {
+                self.calendar.set_for(day, event, name.to_string());
+                let her_availabilities = self.availabilities.get_mut(name).unwrap();
+                Availabilities::update_availabilities(her_availabilities, day, event);
             }
         }
     }
@@ -453,6 +471,39 @@ mod tests {
                 .get(&Date::from_ordinal_date(2025, 5).unwrap())
                 .unwrap()
                 == &vec![FirstNightly]
+        );
+    }
+
+    #[test]
+    fn test_take_initial_allocations() {
+        let content =
+            "JANVIER,2025,1,2,3,4,5\r\nAlice,1ère SF jour,,1,,x,x\r\nAlice,1ère SF nuit,x,,,x,\r\n";
+        let mut calendar_maker = CalendarMaker::from_lines(&mut content.lines());
+        calendar_maker.take_initial_allocations(content.lines());
+        assert!(
+            calendar_maker
+                .calendar
+                .get_for(&Date::from_ordinal_date(2025, 2).unwrap(), &FirstDaily)
+                == Some(&"Alice".to_string())
+        );
+        // Because she's already on call the 2nd day, she's not available anymore the 1st and 3rd day
+        assert!(
+            calendar_maker
+                .availabilities
+                .get("Alice")
+                .unwrap()
+                .get(&calendar_maker.calendar.from())
+                .unwrap()
+                == &vec![]
+        );
+        assert!(
+            calendar_maker
+                .availabilities
+                .get("Alice")
+                .unwrap()
+                .get(&Date::from_ordinal_date(2025, 3).unwrap())
+                .unwrap()
+                == &vec![]
         );
     }
 

@@ -1,4 +1,4 @@
-use roseraie_planning::CalendarMaker;
+use aubepine::CalendarMaker;
 
 #[test]
 fn test_main_for_may_2025() {

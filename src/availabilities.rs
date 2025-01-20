@@ -53,26 +53,30 @@ impl Availabilities {
         popped
     }
 
+    pub fn parse_initial_allocations(from: Date, line: &str) -> HashMap<Date, Event> {
+        let mut on_calls = HashMap::new();
+        let mut day = from;
+        let (availabilities_str, level) = extract_availability_info(line);
+        for token in availabilities_str.split(",") {
+            if token == "1" {
+                on_calls.insert(day, level);
+            }
+            day = day.next_day().unwrap();
+        }
+        on_calls
+    }
+
     fn map_from_str(from: Date, line: &str) -> HashMap<Date, Vec<Event>> {
         let mut days = HashMap::new();
         let mut day = from;
-        let (level_str, availabilities_str) = line.split_once(",").unwrap();
-        let level = match level_str {
-            "1ère SF jour" => Event::FirstDaily,
-            "1ère SF nuit" => Event::FirstNightly,
-            "2ème SF jour" => Event::SecondDaily,
-            "2ème SF nuit" => Event::SecondNightly,
-            _ => panic!(
-                "Unknown on-call level. Must be within (1ère SF jour..2ème SF nuit): {}",
-                level_str
-            ),
-        };
+        let (availabilities_str, level) = extract_availability_info(line);
         for token in availabilities_str.split(",") {
             let token_lower_case = token.to_ascii_lowercase();
             let is_available = token.is_empty()
                 || token_lower_case == "p"
                 || token_lower_case == "pj"
-                || token_lower_case == "pn";
+                || token_lower_case == "pn"
+                || token_lower_case == "1";
             if is_available {
                 days.entry(day)
                     .and_modify(|v: &mut Vec<Event>| v.push(level))
@@ -152,6 +156,21 @@ impl Availabilities {
         formatted.push_str(" |");
         formatted
     }
+}
+
+fn extract_availability_info(line: &str) -> (&str, Event) {
+    let (level_str, availabilities_str) = line.split_once(",").unwrap();
+    let level = match level_str {
+        "1ère SF jour" => Event::FirstDaily,
+        "1ère SF nuit" => Event::FirstNightly,
+        "2ème SF jour" => Event::SecondDaily,
+        "2ème SF nuit" => Event::SecondNightly,
+        _ => panic!(
+            "Unknown on-call level. Must be within (1ère SF jour..2ème SF nuit): {}",
+            level_str
+        ),
+    };
+    (availabilities_str, level)
 }
 
 #[cfg(test)]
